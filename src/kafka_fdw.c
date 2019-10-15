@@ -16,25 +16,25 @@ double kafka_tuple_cost = 0.2f;
 /*
  * Module load callback
  */
-void   _PG_init(void);
+void _PG_init(void);
 
 /*
  * FDW callback routines
  */
-static void            kafkaGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
-static void            kafkaGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
-static ForeignScan *   kafkaGetForeignPlan(PlannerInfo *root,
-                                           RelOptInfo * baserel,
-                                           Oid          foreigntableid,
-                                           ForeignPath *best_path,
-                                           List *       tlist,
-                                           List *       scan_clauses,
-                                           Plan *       outer_plan);
-static void            kafkaExplainForeignScan(ForeignScanState *node, ExplainState *es);
-static void            kafkaBeginForeignScan(ForeignScanState *node, int eflags);
+static void kafkaGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
+static void kafkaGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
+static ForeignScan *kafkaGetForeignPlan(PlannerInfo *root,
+                                        RelOptInfo *baserel,
+                                        Oid foreigntableid,
+                                        ForeignPath *best_path,
+                                        List *tlist,
+                                        List *scan_clauses,
+                                        Plan *outer_plan);
+static void kafkaExplainForeignScan(ForeignScanState *node, ExplainState *es);
+static void kafkaBeginForeignScan(ForeignScanState *node, int eflags);
 static TupleTableSlot *kafkaIterateForeignScan(ForeignScanState *node);
-static void            kafkaReScanForeignScan(ForeignScanState *node);
-static void            kafkaEndForeignScan(ForeignScanState *node);
+static void kafkaReScanForeignScan(ForeignScanState *node);
+static void kafkaEndForeignScan(ForeignScanState *node);
 
 /*
  * Helper functions
@@ -44,22 +44,22 @@ static bool kafkaStop(KafkaFdwExecutionState *festate);
 static bool kafkaStart(KafkaFdwExecutionState *festate);
 static bool kafkaNext(KafkaFdwExecutionState *festate);
 
-static void ReadKafkaMessage(Relation                rel,
+static void ReadKafkaMessage(Relation rel,
                              KafkaFdwExecutionState *festate,
-                             rd_kafka_message_t *    message,
-                             MemoryContext           ccxt,
-                             Datum **                outvalues,
-                             bool **                 outnulls);
+                             rd_kafka_message_t *message,
+                             MemoryContext ccxt,
+                             Datum **outvalues,
+                             bool **outnulls);
 
 static List *kafkaPlanForeignModify(PlannerInfo *root, ModifyTable *plan, Index resultRelation, int subplan_index);
-static void  kafkaBeginForeignModify(ModifyTableState *mtstate,
-                                     ResultRelInfo *   rinfo,
-                                     List *            fdw_private,
-                                     int               subplan_index,
-                                     int               eflags);
+static void kafkaBeginForeignModify(ModifyTableState *mtstate,
+                                    ResultRelInfo *rinfo,
+                                    List *fdw_private,
+                                    int subplan_index,
+                                    int eflags);
 
-static TupleTableSlot *kafkaExecForeignInsert(EState *        estate,
-                                              ResultRelInfo * rinfo,
+static TupleTableSlot *kafkaExecForeignInsert(EState *estate,
+                                              ResultRelInfo *rinfo,
                                               TupleTableSlot *slot,
                                               TupleTableSlot *planSlot);
 
@@ -68,14 +68,14 @@ static void kafkaEndForeignModify(EState *estate, ResultRelInfo *rinfo);
 static int kafkaIsForeignRelUpdatable(Relation rel);
 
 static char *getJsonAttname(Form_pg_attribute attr, StringInfo buff);
-static int   next_work(KafkaScanPData *scan_p, KafkaScanDataDesc *scand);
-static bool  kafkaAnalyzeForeignTable(Relation relation, AcquireSampleRowsFunc *func, BlockNumber *totalpages);
-static int   kafkaAcquireSampleRowsFunc(Relation   relation,
-                                        int        elevel,
-                                        HeapTuple *rows,
-                                        int        targrows,
-                                        double *   totalrows,
-                                        double *   totaldeadrows);
+static int next_work(KafkaScanPData *scan_p, KafkaScanDataDesc *scand);
+static bool kafkaAnalyzeForeignTable(Relation relation, AcquireSampleRowsFunc *func, BlockNumber *totalpages);
+static int kafkaAcquireSampleRowsFunc(Relation relation,
+                                      int elevel,
+                                      HeapTuple *rows,
+                                      int targrows,
+                                      double *totalrows,
+                                      double *totaldeadrows);
 
 /* parallel execution */
 #ifdef DO_PARALLEL
@@ -88,28 +88,25 @@ static void kafkaShutdownForeignScan(ForeignScanState *node);
 static void kafkaGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
 #endif
 
-
 /*
  * Module load callback
  */
-void
-_PG_init(void)
+void _PG_init(void)
 {
-	/* Define custom GUC variables. */
-	DefineCustomRealVariable("kafka_fdw.tuple_cost",
-							 "Kafka tuple cost.",
-							 "Valid range is 0.0 .. 1.0.",
-							 &kafka_tuple_cost,
-							 0.2,
-							 0.0,
-							 1.0,
-							 PGC_USERSET,
-							 0,
-							 NULL,
-							 NULL,
-							 NULL);
+    /* Define custom GUC variables. */
+    DefineCustomRealVariable("kafka_fdw.tuple_cost",
+                             "Kafka tuple cost.",
+                             "Valid range is 0.0 .. 1.0.",
+                             &kafka_tuple_cost,
+                             0.2,
+                             0.0,
+                             1.0,
+                             PGC_USERSET,
+                             0,
+                             NULL,
+                             NULL,
+                             NULL);
 }
-
 
 /*
  * Foreign-data wrapper handler function: return a struct with pointers
@@ -120,31 +117,31 @@ Datum kafka_fdw_handler(PG_FUNCTION_ARGS)
 {
     FdwRoutine *fdwroutine = makeNode(FdwRoutine);
 
-    fdwroutine->GetForeignRelSize   = kafkaGetForeignRelSize;
-    fdwroutine->GetForeignPaths     = kafkaGetForeignPaths;
-    fdwroutine->GetForeignPlan      = kafkaGetForeignPlan;
-    fdwroutine->ExplainForeignScan  = kafkaExplainForeignScan;
-    fdwroutine->BeginForeignScan    = kafkaBeginForeignScan;
-    fdwroutine->IterateForeignScan  = kafkaIterateForeignScan;
-    fdwroutine->ReScanForeignScan   = kafkaReScanForeignScan;
-    fdwroutine->EndForeignScan      = kafkaEndForeignScan;
+    fdwroutine->GetForeignRelSize = kafkaGetForeignRelSize;
+    fdwroutine->GetForeignPaths = kafkaGetForeignPaths;
+    fdwroutine->GetForeignPlan = kafkaGetForeignPlan;
+    fdwroutine->ExplainForeignScan = kafkaExplainForeignScan;
+    fdwroutine->BeginForeignScan = kafkaBeginForeignScan;
+    fdwroutine->IterateForeignScan = kafkaIterateForeignScan;
+    fdwroutine->ReScanForeignScan = kafkaReScanForeignScan;
+    fdwroutine->EndForeignScan = kafkaEndForeignScan;
     fdwroutine->AnalyzeForeignTable = kafkaAnalyzeForeignTable;
 
     fdwroutine->AddForeignUpdateTargets = NULL;
-    fdwroutine->PlanForeignModify       = kafkaPlanForeignModify;
-    fdwroutine->BeginForeignModify      = kafkaBeginForeignModify;
-    fdwroutine->EndForeignModify        = kafkaEndForeignModify;
-    fdwroutine->ExecForeignInsert       = kafkaExecForeignInsert;
-    fdwroutine->ExecForeignUpdate       = NULL;
-    fdwroutine->ExecForeignDelete       = NULL;
-    fdwroutine->IsForeignRelUpdatable   = kafkaIsForeignRelUpdatable;
+    fdwroutine->PlanForeignModify = kafkaPlanForeignModify;
+    fdwroutine->BeginForeignModify = kafkaBeginForeignModify;
+    fdwroutine->EndForeignModify = kafkaEndForeignModify;
+    fdwroutine->ExecForeignInsert = kafkaExecForeignInsert;
+    fdwroutine->ExecForeignUpdate = NULL;
+    fdwroutine->ExecForeignDelete = NULL;
+    fdwroutine->IsForeignRelUpdatable = kafkaIsForeignRelUpdatable;
 #ifdef DO_PARALLEL
-    fdwroutine->IsForeignScanParallelSafe   = kafkaIsForeignScanParallelSafe;
-    fdwroutine->EstimateDSMForeignScan      = kafkaEstimateDSMForeignScan;
-    fdwroutine->InitializeDSMForeignScan    = kafkaInitializeDSMForeignScan;
-    fdwroutine->ReInitializeDSMForeignScan  = kafkaReInitializeDSMForeignScan;
+    fdwroutine->IsForeignScanParallelSafe = kafkaIsForeignScanParallelSafe;
+    fdwroutine->EstimateDSMForeignScan = kafkaEstimateDSMForeignScan;
+    fdwroutine->InitializeDSMForeignScan = kafkaInitializeDSMForeignScan;
+    fdwroutine->ReInitializeDSMForeignScan = kafkaReInitializeDSMForeignScan;
     fdwroutine->InitializeWorkerForeignScan = kafkaInitializeWorkerForeignScan;
-    fdwroutine->ShutdownForeignScan         = kafkaShutdownForeignScan;
+    fdwroutine->ShutdownForeignScan = kafkaShutdownForeignScan;
 #endif
     PG_RETURN_POINTER(fdwroutine);
 }
@@ -159,12 +156,12 @@ kafkaGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntablei
     KafkaFdwPlanState *fdw_private;
 
     /* Fetch options. */
-    fdw_private                = (KafkaFdwPlanState *) palloc0(sizeof(KafkaFdwPlanState));
-    fdw_private->kafka_options = (KafkaOptions){ DEFAULT_KAFKA_OPTIONS };
+    fdw_private = (KafkaFdwPlanState *)palloc0(sizeof(KafkaFdwPlanState));
+    fdw_private->kafka_options = (KafkaOptions){DEFAULT_KAFKA_OPTIONS};
 
     kafkaGetOptions(foreigntableid, &fdw_private->kafka_options, &fdw_private->parse_options);
 
-    baserel->fdw_private = (void *) fdw_private;
+    baserel->fdw_private = (void *)fdw_private;
 
     /* Estimate relation size */
     KafkaEstimateSize(root, baserel, fdw_private);
@@ -181,10 +178,10 @@ kafkaGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntablei
 static void
 kafkaGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
 {
-    KafkaFdwPlanState *fdw_private = (KafkaFdwPlanState *) baserel->fdw_private;
-    Cost               startup_cost, total_cost, run_cost;
-    Path *             foreign_path;
-    int                num_workers;
+    KafkaFdwPlanState *fdw_private = (KafkaFdwPlanState *)baserel->fdw_private;
+    Cost startup_cost, total_cost, run_cost;
+    Path *foreign_path;
+    int num_workers;
 
     DEBUGLOG("%s", __func__);
 
@@ -226,8 +223,8 @@ kafkaGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
                                           NULL, /* no outer rel either */
                                           NULL, /* no extra plan */
                                           NIL);
-        KafkaSetParallelPath((Path *) partial_path, num_workers, startup_cost, total_cost, run_cost);
-        add_partial_path(baserel, (Path *) partial_path);
+        KafkaSetParallelPath((Path *)partial_path, num_workers, startup_cost, total_cost, run_cost);
+        add_partial_path(baserel, (Path *)partial_path);
 
         /*
          * Up until postgres 11 we could just return here and have partial path
@@ -257,19 +254,19 @@ kafkaGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
  */
 static ForeignScan *
 kafkaGetForeignPlan(PlannerInfo *root,
-                    RelOptInfo * baserel,
-                    Oid          foreigntableid,
+                    RelOptInfo *baserel,
+                    Oid foreigntableid,
                     ForeignPath *best_path,
-                    List *       tlist,
-                    List *       scan_clauses,
-                    Plan *       outer_plan)
+                    List *tlist,
+                    List *scan_clauses,
+                    Plan *outer_plan)
 {
-    ListCell *         lc;
-    List *             scan_list, *scan_node_list, *param_list;
-    KafkaFdwPlanState *fdw_private   = (KafkaFdwPlanState *) baserel->fdw_private;
-    List *             options       = NIL;
-    Index              scan_relid    = baserel->relid;
-    KafkaOptions *     kafka_options = &fdw_private->kafka_options;
+    ListCell *lc;
+    List *scan_list, *scan_node_list, *param_list;
+    KafkaFdwPlanState *fdw_private = (KafkaFdwPlanState *)baserel->fdw_private;
+    List *options = NIL;
+    Index scan_relid = baserel->relid;
+    KafkaOptions *kafka_options = &fdw_private->kafka_options;
 
     DEBUGLOG("%s", __func__);
     /*
@@ -286,7 +283,7 @@ kafkaGetForeignPlan(PlannerInfo *root,
     foreach (lc, scan_clauses)
     {
         scan_list = applyKafkaScanOpList(
-          scan_list, dnfNorm(lfirst(lc), kafka_options->partition_attnum, kafka_options->offset_attnum));
+            scan_list, dnfNorm(lfirst(lc), kafka_options->partition_attnum, kafka_options->offset_attnum));
     }
     /* an empty list evaluates to true (scan default all) */
     if (list_length(scan_list) == 0)
@@ -300,24 +297,24 @@ kafkaGetForeignPlan(PlannerInfo *root,
      * see comment for ForeignScan node in plannodes.h
      */
     scan_node_list = NIL;
-    param_list     = NIL;
+    param_list = NIL;
 
     foreach (lc, scan_list)
     {
-        scan_node_list = lappend(scan_node_list, KafkaScanOpToList((KafkaScanOp *) lfirst(lc)));
-        param_list     = list_concat(param_list, (((KafkaScanOp *) lfirst(lc))->p_params));
-        param_list     = list_concat(param_list, (((KafkaScanOp *) lfirst(lc))->o_params));
+        scan_node_list = lappend(scan_node_list, KafkaScanOpToList((KafkaScanOp *)lfirst(lc)));
+        param_list = list_concat(param_list, (((KafkaScanOp *)lfirst(lc))->p_params));
+        param_list = list_concat(param_list, (((KafkaScanOp *)lfirst(lc))->o_params));
 
         DEBUGLOG("part_low %d, part_high %d, offset_low %ld, offset_high %ld, phi: %d, ohi: %d, part_param: %d, "
                  "offset_param %d",
-                 ((KafkaScanOp *) lfirst(lc))->pl,
-                 ((KafkaScanOp *) lfirst(lc))->ph,
-                 ((KafkaScanOp *) lfirst(lc))->ol,
-                 ((KafkaScanOp *) lfirst(lc))->oh,
-                 ((KafkaScanOp *) lfirst(lc))->ph_infinite,
-                 ((KafkaScanOp *) lfirst(lc))->oh_infinite,
-                 list_length(((KafkaScanOp *) lfirst(lc))->p_params),
-                 list_length(((KafkaScanOp *) lfirst(lc))->o_params));
+                 ((KafkaScanOp *)lfirst(lc))->pl,
+                 ((KafkaScanOp *)lfirst(lc))->ph,
+                 ((KafkaScanOp *)lfirst(lc))->ol,
+                 ((KafkaScanOp *)lfirst(lc))->oh,
+                 ((KafkaScanOp *)lfirst(lc))->ph_infinite,
+                 ((KafkaScanOp *)lfirst(lc))->oh_infinite,
+                 list_length(((KafkaScanOp *)lfirst(lc))->p_params),
+                 list_length(((KafkaScanOp *)lfirst(lc))->o_params));
     }
 
     /* we pass the scan_node_list for scanning */
@@ -329,9 +326,9 @@ kafkaGetForeignPlan(PlannerInfo *root,
                             scan_relid,
                             param_list,
                             options,
-                            NIL, /* no custom tlist */
-                            NIL, /* no remote quals */
-                            outer_plan);
+                            NIL /* no custom tlist */
+                                /* no remote quals */
+    );
 }
 
 /* helper function to return a stringified version of scan params */
@@ -371,14 +368,14 @@ static void
 kafkaExplainForeignScan(ForeignScanState *node, ExplainState *es)
 {
 
-    ListCell *              lc;
-    List *                  scanop;
-    KafkaScanP *            p;
+    ListCell *lc;
+    List *scanop;
+    KafkaScanP *p;
     KafkaFdwExecutionState *festate;
-    int                     i             = 0;
-    KafkaOptions            kafka_options = { DEFAULT_KAFKA_OPTIONS };
-    List *                  fdw_private   = ((ForeignScan *) node->ss.ps.plan)->fdw_private;
-    List *                  scan_list     = (List *) list_nth(fdw_private, 0);
+    int i = 0;
+    KafkaOptions kafka_options = {DEFAULT_KAFKA_OPTIONS};
+    List *fdw_private = ((ForeignScan *)node->ss.ps.plan)->fdw_private;
+    List *scan_list = (List *)list_nth(fdw_private, 0);
 
     DEBUGLOG("%s", __func__);
 
@@ -388,7 +385,7 @@ kafkaExplainForeignScan(ForeignScanState *node, ExplainState *es)
     ExplainPropertyText("Kafka topic", kafka_options.topic, es);
     if (es->analyze)
     {
-        festate = (KafkaFdwExecutionState *) node->fdw_state;
+        festate = (KafkaFdwExecutionState *)node->fdw_state;
         if (festate)
         {
             /* output the real work */
@@ -411,7 +408,7 @@ kafkaExplainForeignScan(ForeignScanState *node, ExplainState *es)
     {
         foreach (lc, scan_list)
         {
-            scanop = (List *) lfirst(lc);
+            scanop = (List *)lfirst(lc);
             if (kafka_valid_scanop_list(scanop))
                 ExplainPropertyText("scanning", KafkaScanOpListToString(scanop), es);
         }
@@ -422,11 +419,11 @@ static KafkaScanPData *
 makeScanPData(void)
 {
     KafkaScanPData *res;
-    res          = (KafkaScanPData *) palloc(sizeof(KafkaScanPData));
-    res->data    = (KafkaScanP *) palloc(sizeof(KafkaScanP));
-    res->len     = 0;
+    res = (KafkaScanPData *)palloc(sizeof(KafkaScanPData));
+    res->data = (KafkaScanP *)palloc(sizeof(KafkaScanP));
+    res->len = 0;
     res->max_len = 1;
-    res->cursor  = 0;
+    res->cursor = 0;
 
     return res;
 }
@@ -435,23 +432,23 @@ static KafkaFdwExecutionState *
 makeKafkaExecutionState(Relation relation, KafkaOptions *kafka_options, ParseOptions *parse_options)
 {
     KafkaFdwExecutionState *festate;
-    AttrNumber              num_phys_attrs;
-    FmgrInfo *              in_functions;
-    Oid *                   typioparams;
-    int                     attnum;
-    Oid                     in_func_oid;
-    List *                  attnums = NIL;
-    TupleDesc               tupDesc;
+    AttrNumber num_phys_attrs;
+    FmgrInfo *in_functions;
+    Oid *typioparams;
+    int attnum;
+    Oid in_func_oid;
+    List *attnums = NIL;
+    TupleDesc tupDesc;
 
     /* setup execution state */
-    festate               = (KafkaFdwExecutionState *) palloc0(sizeof(KafkaFdwExecutionState));
+    festate = (KafkaFdwExecutionState *)palloc0(sizeof(KafkaFdwExecutionState));
     festate->param_values = NULL;
     festate->kafka_handle = NULL;
     festate->kafka_topic_handle = NULL;
-    festate->scan_data    = makeScanPData();
+    festate->scan_data = makeScanPData();
 
     /* we we get a parallel scan_data_desc will point to a shared mem segment by InitializeDSMForeignScan */
-    festate->scan_data_desc = (KafkaScanDataDesc *) palloc0(sizeof(KafkaScanDataDesc));
+    festate->scan_data_desc = (KafkaScanDataDesc *)palloc0(sizeof(KafkaScanDataDesc));
 #ifdef DO_PARALLEL
     pg_atomic_init_u32(&festate->scan_data_desc->next_scanp, 0);
 #else
@@ -468,7 +465,7 @@ makeKafkaExecutionState(Relation relation, KafkaOptions *kafka_options, ParseOpt
     if (kafka_options->junk_error_attnum != -1)
         initStringInfo(&festate->junk_buf);
 
-    tupDesc        = RelationGetDescr(relation);
+    tupDesc = RelationGetDescr(relation);
     num_phys_attrs = tupDesc->natts;
 
     /* allocate enough space for fields */
@@ -488,8 +485,8 @@ makeKafkaExecutionState(Relation relation, KafkaOptions *kafka_options, ParseOpt
      * the input function), and info about defaults and constraints. (Which
      * input function we use depends on text/binary format choice.)
      */
-    in_functions        = (FmgrInfo *) palloc(num_phys_attrs * sizeof(FmgrInfo));
-    typioparams         = (Oid *) palloc(num_phys_attrs * sizeof(Oid));
+    in_functions = (FmgrInfo *)palloc(num_phys_attrs * sizeof(FmgrInfo));
+    typioparams = (Oid *)palloc(num_phys_attrs * sizeof(Oid));
     festate->attisarray = NULL;
 
     for (attnum = 1; attnum <= num_phys_attrs; attnum++)
@@ -516,8 +513,8 @@ makeKafkaExecutionState(Relation relation, KafkaOptions *kafka_options, ParseOpt
 
     /* We keep those variables in festate. */
     festate->in_functions = in_functions;
-    festate->typioparams  = typioparams;
-    festate->attnumlist   = attnums;
+    festate->typioparams = typioparams;
+    festate->attnumlist = attnums;
 
     return festate;
 }
@@ -529,17 +526,17 @@ makeKafkaExecutionState(Relation relation, KafkaOptions *kafka_options, ParseOpt
 static void
 kafkaBeginForeignScan(ForeignScanState *node, int eflags)
 {
-    ForeignScan *           plan          = (ForeignScan *) node->ss.ps.plan;
-    KafkaOptions            kafka_options = { DEFAULT_KAFKA_OPTIONS };
-    ParseOptions            parse_options = { .format = -1 };
+    ForeignScan *plan = (ForeignScan *)node->ss.ps.plan;
+    KafkaOptions kafka_options = {DEFAULT_KAFKA_OPTIONS};
+    ParseOptions parse_options = {.format = -1};
     KafkaFdwExecutionState *festate;
-    List *                  fdw_private;
-    List *                  scan_list;
+    List *fdw_private;
+    List *scan_list;
 
     DEBUGLOG("%s", __func__);
 
-    fdw_private = ((ForeignScan *) node->ss.ps.plan)->fdw_private;
-    scan_list   = (List *) list_nth(fdw_private, 0);
+    fdw_private = ((ForeignScan *)node->ss.ps.plan)->fdw_private;
+    scan_list = (List *)list_nth(fdw_private, 0);
 
     kafkaGetOptions(RelationGetRelid(node->ss.ss_currentRelation), &kafka_options, &parse_options);
 
@@ -553,8 +550,8 @@ kafkaBeginForeignScan(ForeignScanState *node, int eflags)
     }
 
     /* setup execution state */
-    festate         = makeKafkaExecutionState(node->ss.ss_currentRelation, &kafka_options, &parse_options);
-    node->fdw_state = (void *) festate;
+    festate = makeKafkaExecutionState(node->ss.ss_currentRelation, &kafka_options, &parse_options);
+    node->fdw_state = (void *)festate;
 
     /*
      * Init Kafka-related stuff
@@ -576,7 +573,7 @@ kafkaBeginForeignScan(ForeignScanState *node, int eflags)
     }
 
     festate->scanop_list = scan_list;
-    festate->buffer      = palloc0(sizeof(rd_kafka_message_t *) * (kafka_options.batch_size));
+    festate->buffer = palloc0(sizeof(rd_kafka_message_t *) * (kafka_options.batch_size));
 
     /*
      * Prepare parameters that need to be extracted from psql query.
@@ -585,24 +582,24 @@ kafkaBeginForeignScan(ForeignScanState *node, int eflags)
     if (list_length(plan->fdw_exprs) > 0)
     {
         ListCell *lc;
-        Param *   p;
-        int       i = 0;
+        Param *p;
+        int i = 0;
 
-        festate->exec_exprs   = ExecInitExprList(plan->fdw_exprs, (PlanState *) node);
+        festate->exec_exprs = ExecInitExprList(plan->fdw_exprs, (PlanState *)node);
         festate->param_values = palloc0(list_length(plan->fdw_exprs) * sizeof(KafkaParamValue));
 
         foreach (lc, plan->fdw_exprs)
         {
-            p                                = (Param *) lfirst(lc);
+            p = (Param *)lfirst(lc);
             festate->param_values[i].paramid = p->paramid;
-            festate->param_values[i].oid     = p->paramtype;
+            festate->param_values[i].oid = p->paramtype;
             i++;
         }
     }
     else
     {
         festate->param_values = NULL;
-        festate->exec_exprs   = NIL;
+        festate->exec_exprs = NIL;
     }
 }
 
@@ -614,7 +611,7 @@ static char *
 transform_json_array(char *string)
 {
     char *s;
-    bool  in_quote = false;
+    bool in_quote = false;
 
     for (s = string; *s != '\0'; s++)
     {
@@ -622,31 +619,37 @@ transform_json_array(char *string)
         {
             switch (*s)
             {
-                case '[': *s = '{'; break;
-                case ']': *s = '}'; break;
-                case '\"': in_quote = true; break;
+            case '[':
+                *s = '{';
+                break;
+            case ']':
+                *s = '}';
+                break;
+            case '\"':
+                in_quote = true;
+                break;
             }
         }
         else /* ignore symbols under quotation */
         {
             switch (*s)
             {
-                case '\"':
-                    /* end of quotation */
-                    in_quote = false;
-                    break;
-                case '\\':
-                    /* special character, ignore the next symbol */
-                    s++;
-                    /*
+            case '\"':
+                /* end of quotation */
+                in_quote = false;
+                break;
+            case '\\':
+                /* special character, ignore the next symbol */
+                s++;
+                /*
                      * shouldn't normally happen, but it could be that the
                      * message is malformed and after backslash goes the
                      * terminator symbol. Better check it to avoid reading
                      * outside the allocated string
                      */
-                    if (*s == '\0')
-                        return string;
-                    break;
+                if (*s == '\0')
+                    return string;
+                break;
             }
         }
     }
@@ -663,15 +666,15 @@ kafkaIterateForeignScan(ForeignScanState *node)
 {
     // DEBUGLOG("%s", __func__);
 
-    KafkaFdwExecutionState *festate       = (KafkaFdwExecutionState *) node->fdw_state;
-    ExprContext *           econtext      = node->ss.ps.ps_ExprContext;
-    TupleTableSlot *        slot          = node->ss.ss_ScanTupleSlot;
-    rd_kafka_message_t *    message       = NULL; /* keep compiler quiet */
-    KafkaOptions *          kafka_options = &festate->kafka_options;
-    MemoryContext           ccxt          = CurrentMemoryContext;
-    KafkaScanDataDesc *     scand         = festate->scan_data_desc;
-    int                     param_num     = 0;
-    KafkaScanP *            scan_p;
+    KafkaFdwExecutionState *festate = (KafkaFdwExecutionState *)node->fdw_state;
+    ExprContext *econtext = node->ss.ps.ps_ExprContext;
+    TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
+    rd_kafka_message_t *message = NULL; /* keep compiler quiet */
+    KafkaOptions *kafka_options = &festate->kafka_options;
+    MemoryContext ccxt = CurrentMemoryContext;
+    KafkaScanDataDesc *scand = festate->scan_data_desc;
+    int param_num = 0;
+    KafkaScanP *scan_p;
 
     /* first run eval expressions and setup working list */
     if (festate->scan_data->len == 0)
@@ -685,13 +688,13 @@ kafkaIterateForeignScan(ForeignScanState *node)
         if (list_length(festate->exec_exprs) > 0)
         {
             MemoryContext oldcontext;
-            ListCell *    lc_exp;
+            ListCell *lc_exp;
             oldcontext = MemoryContextSwitchTo(econtext->ecxt_per_tuple_memory);
 
             foreach (lc_exp, festate->exec_exprs)
             {
                 festate->param_values[param_num].value =
-                  KafkaExecEvalExpr((ExprState *) lfirst(lc_exp), econtext, &festate->param_values[param_num].is_null);
+                    KafkaExecEvalExpr((ExprState *)lfirst(lc_exp), econtext, &festate->param_values[param_num].is_null);
                 param_num++;
             }
             MemoryContextSwitchTo(oldcontext);
@@ -760,7 +763,7 @@ kafkaIterateForeignScan(ForeignScanState *node)
 
         if (festate->scan_data->cursor >= 0)
         {
-            scan_p = (KafkaScanP *) &festate->scan_data->data[festate->scan_data->cursor];
+            scan_p = (KafkaScanP *)&festate->scan_data->data[festate->scan_data->cursor];
             // list is done we're finished //
             if (scan_p->offset_lim >= 0 && scan_p->offset_lim < message->offset)
             {
@@ -797,9 +800,9 @@ kafkaIterateForeignScan(ForeignScanState *node)
 
         if (festate->buffer_count == -1)
             ereport(
-              ERROR,
-              (errcode(ERRCODE_FDW_ERROR),
-               errmsg_internal("kafka_fdw got an error fetching data %s", rd_kafka_err2str(rd_kafka_last_error()))));
+                ERROR,
+                (errcode(ERRCODE_FDW_ERROR),
+                 errmsg_internal("kafka_fdw got an error fetching data %s", rd_kafka_err2str(rd_kafka_last_error()))));
 
         if (festate->buffer_count <= 0) /* no more messages within timeout*/
         {
@@ -825,7 +828,7 @@ kafkaIterateForeignScan(ForeignScanState *node)
         }
     }
 
-    ReadKafkaMessage(node->ss.ss_currentRelation, festate, message, ccxt, &slot->tts_values, &slot->tts_isnull);
+    ReadKafkaMessage(node->ss.ss_currentRelation, festate, message, ccxt, &slot->PRIVATE_tts_values, &slot->PRIVATE_tts_isnull);
     ExecStoreVirtualTuple(slot);
 
     rd_kafka_message_destroy(message);
@@ -835,29 +838,29 @@ kafkaIterateForeignScan(ForeignScanState *node)
 }
 
 static void
-ReadKafkaMessage(Relation                rel,
+ReadKafkaMessage(Relation rel,
                  KafkaFdwExecutionState *festate,
-                 rd_kafka_message_t *    message,
-                 MemoryContext           ccxt,
-                 Datum **                outvalues,
-                 bool **                 outnulls)
+                 rd_kafka_message_t *message,
+                 MemoryContext ccxt,
+                 Datum **outvalues,
+                 bool **outnulls)
 {
-    TupleDesc          tupDesc       = RelationGetDescr(rel);
-    int                num_attrs     = list_length(festate->attnumlist);
-    volatile bool      catched_error = false;
+    TupleDesc tupDesc = RelationGetDescr(rel);
+    int num_attrs = list_length(festate->attnumlist);
+    volatile bool catched_error = false;
 
     Datum *values = palloc0(num_attrs * sizeof(Datum));
-    bool * nulls  = palloc0(num_attrs * sizeof(bool));
+    bool *nulls = palloc0(num_attrs * sizeof(bool));
 
     ParseOptions *parse_options = &festate->parse_options;
     KafkaOptions *kafka_options = &festate->kafka_options;
-    bool          error         = false;
-    int           fldct, fldnum;
-    ListCell *    cur;
+    bool error = false;
+    int fldct, fldnum;
+    ListCell *cur;
 
     // DEBUGLOG("message: %s", message->payload);
 
-    fldct = KafkaReadAttributes((char *) message->payload, message->len, festate, parse_options->format, &error);
+    fldct = KafkaReadAttributes((char *)message->payload, message->len, festate, parse_options->format, &error);
 
     /* unterminated quote, total junk */
     if (error && parse_options->format == CSV)
@@ -908,8 +911,8 @@ ReadKafkaMessage(Relation                rel,
     fldnum = 0;
     foreach (cur, festate->attnumlist)
     {
-        int   attnum = lfirst_int(cur);
-        int   m      = attnum - 1;
+        int attnum = lfirst_int(cur);
+        int m = attnum - 1;
         char *string;
         Form_pg_attribute attr = TupleDescAttr(tupDesc, m);
 
@@ -922,13 +925,13 @@ ReadKafkaMessage(Relation                rel,
         if (attnum == kafka_options->partition_attnum)
         {
             values[m] = Int32GetDatum(message->partition);
-            nulls[m]  = false;
+            nulls[m] = false;
             continue;
         }
         if (attnum == kafka_options->offset_attnum)
         {
             values[m] = Int64GetDatum(message->offset);
-            nulls[m]  = false;
+            nulls[m] = false;
             continue;
         }
         if (fldnum >= fldct)
@@ -953,13 +956,13 @@ ReadKafkaMessage(Relation                rel,
             PG_TRY();
             {
                 values[m] =
-                  InputFunctionCall(&festate->in_functions[m], string, festate->typioparams[m], attr->atttypmod);
+                    InputFunctionCall(&festate->in_functions[m], string, festate->typioparams[m], attr->atttypmod);
                 nulls[m] = false;
             }
             PG_CATCH();
             {
-                values[m]     = (Datum) 0;
-                nulls[m]      = true;
+                values[m] = (Datum)0;
+                nulls[m] = true;
                 catched_error = true;
 
                 MemoryContextSwitchTo(ccxt);
@@ -981,7 +984,7 @@ ReadKafkaMessage(Relation                rel,
         }
 
         values[m] = InputFunctionCall(&festate->in_functions[m], string, festate->typioparams[m], attr->atttypmod);
-        nulls[m]  = false;
+        nulls[m] = false;
     }
 
     if (catched_error)
@@ -989,17 +992,17 @@ ReadKafkaMessage(Relation                rel,
         if (kafka_options->junk_attnum != -1)
         {
             values[kafka_options->junk_attnum - 1] = PointerGetDatum(cstring_to_text(message->payload));
-            nulls[kafka_options->junk_attnum - 1]  = false;
+            nulls[kafka_options->junk_attnum - 1] = false;
         }
         if (kafka_options->junk_error_attnum != -1)
         {
             values[kafka_options->junk_error_attnum - 1] = PointerGetDatum(cstring_to_text(festate->junk_buf.data));
-            nulls[kafka_options->junk_error_attnum - 1]  = false;
+            nulls[kafka_options->junk_error_attnum - 1] = false;
         }
     }
 
     *outvalues = values;
-    *outnulls  = nulls;
+    *outnulls = nulls;
 }
 
 /*
@@ -1009,7 +1012,7 @@ ReadKafkaMessage(Relation                rel,
 static void
 kafkaReScanForeignScan(ForeignScanState *node)
 {
-    KafkaFdwExecutionState *festate = (KafkaFdwExecutionState *) node->fdw_state;
+    KafkaFdwExecutionState *festate = (KafkaFdwExecutionState *)node->fdw_state;
     kafkaStop(festate);
     festate->scan_data->cursor = 0;
     kafkaStart(festate);
@@ -1022,7 +1025,7 @@ kafkaReScanForeignScan(ForeignScanState *node)
 static void
 kafkaEndForeignScan(ForeignScanState *node)
 {
-    KafkaFdwExecutionState *festate = (KafkaFdwExecutionState *) node->fdw_state;
+    KafkaFdwExecutionState *festate = (KafkaFdwExecutionState *)node->fdw_state;
 
     DEBUGLOG("%s", __func__);
 
@@ -1084,9 +1087,9 @@ static bool
 kafkaStop(KafkaFdwExecutionState *festate)
 {
 
-    KafkaScanP *       scan_p;
+    KafkaScanP *scan_p;
     KafkaScanDataDesc *scand = festate->scan_data_desc;
-    KafkaScanPData    *scan_data = festate->scan_data;
+    KafkaScanPData *scan_data = festate->scan_data;
 
     DEBUGLOG("%s", __func__);
     if (scan_data->cursor == -1 || scan_data->len == 0)
@@ -1100,7 +1103,7 @@ kafkaStop(KafkaFdwExecutionState *festate)
         ereport(ERROR,
                 (errcode(ERRCODE_FDW_ERROR),
                  errmsg_internal(
-                   "kafka_fdw: Failed to stop consuming partition %d:  %s", scan_p->partition, rd_kafka_err2str(err))));
+                     "kafka_fdw: Failed to stop consuming partition %d:  %s", scan_p->partition, rd_kafka_err2str(err))));
     }
 
     /* release unconsumed messages */
@@ -1125,10 +1128,10 @@ static bool
 kafkaStart(KafkaFdwExecutionState *festate)
 {
     rd_kafka_resp_err_t err;
-    KafkaScanP *        scan_p;
-    int64_t             low, high;
+    KafkaScanP *scan_p;
+    int64_t low, high;
 
-    festate->buffer_count  = 0;
+    festate->buffer_count = 0;
     festate->buffer_cursor = 0;
 
     DEBUGLOG("%s", __func__);
@@ -1139,7 +1142,7 @@ kafkaStart(KafkaFdwExecutionState *festate)
     scan_p = &festate->scan_data->data[festate->scan_data->cursor];
 
     err = rd_kafka_query_watermark_offsets(
-      festate->kafka_handle, festate->kafka_options.topic, scan_p->partition, &low, &high, WARTERMARK_TIMEOUT);
+        festate->kafka_handle, festate->kafka_options.topic, scan_p->partition, &low, &high, WARTERMARK_TIMEOUT);
 
     if (err != RD_KAFKA_RESP_ERR_NO_ERROR && err != RD_KAFKA_RESP_ERR__UNKNOWN_PARTITION)
         ereport(ERROR,
@@ -1177,14 +1180,14 @@ static List *
 kafkaPlanForeignModify(PlannerInfo *root, ModifyTable *plan, Index resultRelation, int subplan_index)
 {
 
-    Relation       rel;
-    TupleDesc      tupdesc;
-    int            attnum;
-    List *         targetAttrs   = NIL;
-    List *         returningList = NIL;
-    RangeTblEntry *rte           = planner_rt_fetch(resultRelation, root);
+    Relation rel;
+    TupleDesc tupdesc;
+    int attnum;
+    List *targetAttrs = NIL;
+    List *returningList = NIL;
+    RangeTblEntry *rte = planner_rt_fetch(resultRelation, root);
 
-    rel     = heap_open(rte->relid, NoLock);
+    rel = heap_open(rte->relid, NoLock);
     tupdesc = RelationGetDescr(rel);
 
     for (attnum = 1; attnum <= tupdesc->natts; attnum++)
@@ -1199,10 +1202,10 @@ kafkaPlanForeignModify(PlannerInfo *root, ModifyTable *plan, Index resultRelatio
      * Extract the relevant RETURNING list if any.
      */
     if (plan->returningLists)
-        returningList = (List *) list_nth(plan->returningLists, subplan_index);
+        returningList = (List *)list_nth(plan->returningLists, subplan_index);
 
     if (plan->onConflictAction)
-        elog(ERROR, "unexpected ON CONFLICT specification: %d", (int) plan->onConflictAction);
+        elog(ERROR, "unexpected ON CONFLICT specification: %d", (int)plan->onConflictAction);
 
     heap_close(rel, NoLock);
 
@@ -1241,23 +1244,23 @@ kafkaPlanForeignModify(PlannerInfo *root, ModifyTable *plan, Index resultRelatio
 
 static void
 kafkaBeginForeignModify(ModifyTableState *mtstate,
-                        ResultRelInfo *   rinfo,
-                        List *            fdw_private,
-                        int               subplan_index,
-                        int               eflags)
+                        ResultRelInfo *rinfo,
+                        List *fdw_private,
+                        int subplan_index,
+                        int eflags)
 {
     KafkaFdwModifyState *festate;
-    rd_kafka_t *         rk;
-    rd_kafka_topic_t *   rkt;
-    rd_kafka_conf_t *    conf;
-    Oid                  typefnoid;
-    bool                 isvarlena;
-    int                  n_params, num = 0;
-    ListCell *           lc, *prev, *next;
-    KafkaOptions         kafka_options = { DEFAULT_KAFKA_OPTIONS };
-    ParseOptions         parse_options = { .format = -1 };
-    Relation             rel           = rinfo->ri_RelationDesc;
-    char                 errstr[512]; /* librdkafka API error reporting buffer */
+    rd_kafka_t *rk;
+    rd_kafka_topic_t *rkt;
+    rd_kafka_conf_t *conf;
+    Oid typefnoid;
+    bool isvarlena;
+    int n_params, num = 0;
+    ListCell *lc, *prev, *next;
+    KafkaOptions kafka_options = {DEFAULT_KAFKA_OPTIONS};
+    ParseOptions parse_options = {.format = -1};
+    Relation rel = rinfo->ri_RelationDesc;
+    char errstr[512]; /* librdkafka API error reporting buffer */
 
     DEBUGLOG("%s", __func__);
 
@@ -1272,20 +1275,20 @@ kafkaBeginForeignModify(ModifyTableState *mtstate,
     kafkaGetOptions(RelationGetRelid(rel), &kafka_options, &parse_options);
 
     /* setup execution state */
-    festate                = (KafkaFdwModifyState *) palloc0(sizeof(KafkaFdwModifyState));
+    festate = (KafkaFdwModifyState *)palloc0(sizeof(KafkaFdwModifyState));
     festate->kafka_options = kafka_options;
     festate->parse_options = parse_options;
 
-    festate->attnumlist    = (List *) list_nth(fdw_private, 0);
-    n_params               = list_length(festate->attnumlist);
-    festate->out_functions = (FmgrInfo *) palloc0(sizeof(FmgrInfo) * n_params);
+    festate->attnumlist = (List *)list_nth(fdw_private, 0);
+    n_params = list_length(festate->attnumlist);
+    festate->out_functions = (FmgrInfo *)palloc0(sizeof(FmgrInfo) * n_params);
 
     /* if we use json we need attnames and oids */
     if (parse_options.format == JSON)
     {
         initStringInfo(&festate->attname_buf);
-        festate->attnames    = palloc0(sizeof(char *) * n_params);
-        festate->typioparams = (Oid *) palloc(n_params * sizeof(Oid));
+        festate->attnames = palloc0(sizeof(char *) * n_params);
+        festate->typioparams = (Oid *)palloc(n_params * sizeof(Oid));
     }
 
     initStringInfo(&festate->attribute_buf);
@@ -1294,7 +1297,7 @@ kafkaBeginForeignModify(ModifyTableState *mtstate,
     for (lc = list_head(festate->attnumlist); lc; lc = next)
     {
         int attnum = lfirst_int(lc);
-        next       = lnext(lc);
+        next = lnext(lc);
 
         if (!parsable_attnum(attnum, kafka_options))
         {
@@ -1311,7 +1314,7 @@ kafkaBeginForeignModify(ModifyTableState *mtstate,
 
             if (parse_options.format == JSON)
             {
-                festate->attnames[num]    = getJsonAttname(attr, &festate->attname_buf);
+                festate->attnames[num] = getJsonAttname(attr, &festate->attname_buf);
                 festate->typioparams[num] = attr->atttypid;
                 DEBUGLOG("type oid %u", attr->atttypid);
             }
@@ -1365,7 +1368,7 @@ kafkaBeginForeignModify(ModifyTableState *mtstate,
     }
 
     festate->kafka_topic_handle = rkt;
-    festate->kafka_handle       = rk;
+    festate->kafka_handle = rk;
 
     rinfo->ri_FdwState = festate;
 }
@@ -1399,11 +1402,11 @@ kafkaBeginForeignModify(ModifyTableState *mtstate,
 static TupleTableSlot *
 kafkaExecForeignInsert(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot)
 {
-    KafkaFdwModifyState *festate   = (KafkaFdwModifyState *) rinfo->ri_FdwState;
-    int                  partition = RD_KAFKA_PARTITION_UA;
-    int                  ret;
-    Datum                value;
-    bool                 isnull;
+    KafkaFdwModifyState *festate = (KafkaFdwModifyState *)rinfo->ri_FdwState;
+    int partition = RD_KAFKA_PARTITION_UA;
+    int ret;
+    Datum value;
+    bool isnull;
 
     DEBUGLOG("%s", __func__);
 
@@ -1465,7 +1468,7 @@ retry:
 static void
 kafkaEndForeignModify(EState *estate, ResultRelInfo *rinfo)
 {
-    KafkaFdwModifyState *festate = (KafkaFdwModifyState *) rinfo->ri_FdwState;
+    KafkaFdwModifyState *festate = (KafkaFdwModifyState *)rinfo->ri_FdwState;
 
     rd_kafka_flush(festate->kafka_handle, 10 * 1000 /* wait for max 10 seconds */);
 
@@ -1484,9 +1487,9 @@ kafkaEndForeignModify(EState *estate, ResultRelInfo *rinfo)
 static char *
 getJsonAttname(Form_pg_attribute attr, StringInfo buff)
 {
-    List *    options;
+    List *options;
     ListCell *lc;
-    int       cur_start = buff->len == 0 ? 0 : buff->len + 1;
+    int cur_start = buff->len == 0 ? 0 : buff->len + 1;
 
     if (buff->len != 0)
         appendStringInfoChar(buff, '\0');
@@ -1494,7 +1497,7 @@ getJsonAttname(Form_pg_attribute attr, StringInfo buff)
     options = GetForeignColumnOptions(attr->attrelid, attr->attnum);
     foreach (lc, options)
     {
-        DefElem *def = (DefElem *) lfirst(lc);
+        DefElem *def = (DefElem *)lfirst(lc);
         if (strcmp(def->defname, "json") == 0)
         {
             appendStringInfoString(buff, defGetString(def));
@@ -1524,26 +1527,26 @@ kafkaAnalyzeForeignTable(Relation relation, AcquireSampleRowsFunc *func, BlockNu
  *      Extract sample rows for ANALYZE purposes.
  */
 static int
-kafkaAcquireSampleRowsFunc(Relation   relation,
-                           int        elevel,
+kafkaAcquireSampleRowsFunc(Relation relation,
+                           int elevel,
                            HeapTuple *rows,
-                           int        targrows,
-                           double *   totalrows,
-                           double *   totaldeadrows)
+                           int targrows,
+                           double *totalrows,
+                           double *totaldeadrows)
 {
     KafkaFdwExecutionState *festate;
-    rd_kafka_message_t **   messages;
-    int                     p;
-    int                     partnum;
-    int64_t *               low, *high; /* partition bounds */
-    KafkaOptions            kafka_options = { DEFAULT_KAFKA_OPTIONS };
-    ParseOptions            parse_options = { .format = -1 };
-    Datum *                 values;
-    bool *                  nulls;
-    char                    errstr[KAFKA_MAX_ERR_MSG];
-    volatile bool           catched_error = false;
-    volatile int            cnt           = 0;
-    volatile int64          total         = 0;
+    rd_kafka_message_t **messages;
+    int p;
+    int partnum;
+    int64_t *low, *high; /* partition bounds */
+    KafkaOptions kafka_options = {DEFAULT_KAFKA_OPTIONS};
+    ParseOptions parse_options = {.format = -1};
+    Datum *values;
+    bool *nulls;
+    char errstr[KAFKA_MAX_ERR_MSG];
+    volatile bool catched_error = false;
+    volatile int cnt = 0;
+    volatile int64 total = 0;
 
     /* Initialize execution state */
     kafkaGetOptions(RelationGetRelid(relation), &kafka_options, &parse_options);
@@ -1561,7 +1564,7 @@ kafkaAcquireSampleRowsFunc(Relation   relation,
         partnum = festate->partition_list->partition_cnt;
 
         /* Allocate memory for partition bounds */
-        low  = palloc(sizeof(int64_t) * partnum);
+        low = palloc(sizeof(int64_t) * partnum);
         high = palloc(sizeof(int64_t) * partnum);
 
         /* Obtain lower and upper bounds for partitions */
@@ -1573,7 +1576,7 @@ kafkaAcquireSampleRowsFunc(Relation   relation,
                                                    festate->kafka_options.topic,
                                                    p, &low[p], &high[p],
                                                    WARTERMARK_TIMEOUT);
-            
+
             if (err != RD_KAFKA_RESP_ERR_NO_ERROR && err != RD_KAFKA_RESP_ERR__UNKNOWN_PARTITION)
             {
                 elog(ERROR, "Failed to get watermarks %s", rd_kafka_err2str(err));
@@ -1581,7 +1584,7 @@ kafkaAcquireSampleRowsFunc(Relation   relation,
             total += high[p] - low[p];
         }
         *totaldeadrows = 0;
-        *totalrows     = total;
+        *totalrows = total;
 
         /* Empty topic */
         if (total == 0)
@@ -1589,19 +1592,19 @@ kafkaAcquireSampleRowsFunc(Relation   relation,
 
         /* Allocate memory for batch and tuple data */
         messages = palloc(kafka_options.batch_size * sizeof(rd_kafka_message_t *));
-        values   = palloc(sizeof(Datum) * RelationGetDescr(relation)->natts);
-        nulls    = palloc(sizeof(bool) * RelationGetDescr(relation)->natts);
+        values = palloc(sizeof(Datum) * RelationGetDescr(relation)->natts);
+        nulls = palloc(sizeof(bool) * RelationGetDescr(relation)->natts);
 
         /* Get a sample from each partition */
         for (p = 0; p < partnum; p++)
         {
-            int64          partrows, rows_to_read, step;
-            int64          batch_size = kafka_options.batch_size;
-            int            batches;
-            double         share;
+            int64 partrows, rows_to_read, step;
+            int64 batch_size = kafka_options.batch_size;
+            int batches;
+            double share;
             volatile int64 offset = low[p];
-            volatile int   m;
-            volatile bool  done = false;
+            volatile int m;
+            volatile bool done = false;
 
             /*
              * Ideally we need to peak individual messages from the partition evenly for
@@ -1611,10 +1614,10 @@ kafkaAcquireSampleRowsFunc(Relation   relation,
              * Calculate how many batches should we read from this partition and how big
              * steps between those batches should be.
              */
-            partrows     = high[p] - low[p]; /* rows in current partition */
-            share        = partrows / (double) total;
-            rows_to_read = share * targrows;          /* rows to read from partition */
-            batches      = rows_to_read / batch_size; /* batches number to read */
+            partrows = high[p] - low[p]; /* rows in current partition */
+            share = partrows / (double)total;
+            rows_to_read = share * targrows;     /* rows to read from partition */
+            batches = rows_to_read / batch_size; /* batches number to read */
             if (batches <= 0)
                 continue;
             step = batch_size + (partrows - rows_to_read) / batches;
@@ -1637,7 +1640,7 @@ kafkaAcquireSampleRowsFunc(Relation   relation,
 
                 /* Read next batch */
                 rows_fetched =
-                  rd_kafka_consume_batch(festate->kafka_topic_handle, p, kafka_options.buffer_delay, messages, batch_size);
+                    rd_kafka_consume_batch(festate->kafka_topic_handle, p, kafka_options.buffer_delay, messages, batch_size);
                 /* Not empty dataset obtained */
                 if (rows_fetched > 0)
                 {
@@ -1751,8 +1754,8 @@ kafkaEstimateDSMForeignScan(ForeignScanState *node, ParallelContext *pcxt)
 static void
 kafkaInitializeDSMForeignScan(ForeignScanState *node, ParallelContext *pcxt, void *coordinate)
 {
-    KafkaScanDataDesc *     scand   = (KafkaScanDataDesc *) coordinate;
-    KafkaFdwExecutionState *festate = (KafkaFdwExecutionState *) node->fdw_state;
+    KafkaScanDataDesc *scand = (KafkaScanDataDesc *)coordinate;
+    KafkaFdwExecutionState *festate = (KafkaFdwExecutionState *)node->fdw_state;
 
     scand->ps_relid = RelationGetRelid(node->ss.ss_currentRelation);
     pg_atomic_write_u32(&scand->next_scanp, 0);
@@ -1762,7 +1765,7 @@ kafkaInitializeDSMForeignScan(ForeignScanState *node, ParallelContext *pcxt, voi
 static void
 kafkaReInitializeDSMForeignScan(ForeignScanState *node, ParallelContext *pcxt, void *coordinate)
 {
-    KafkaScanDataDesc *scand = (KafkaScanDataDesc *) coordinate;
+    KafkaScanDataDesc *scand = (KafkaScanDataDesc *)coordinate;
 
     pg_atomic_write_u32(&scand->next_scanp, 0);
 }
@@ -1770,15 +1773,15 @@ kafkaReInitializeDSMForeignScan(ForeignScanState *node, ParallelContext *pcxt, v
 static void
 kafkaInitializeWorkerForeignScan(ForeignScanState *node, shm_toc *toc, void *coordinate)
 {
-    KafkaScanDataDesc *     scand   = (KafkaScanDataDesc *) coordinate;
-    KafkaFdwExecutionState *festate = (KafkaFdwExecutionState *) node->fdw_state;
-    festate->scan_data_desc         = scand;
+    KafkaScanDataDesc *scand = (KafkaScanDataDesc *)coordinate;
+    KafkaFdwExecutionState *festate = (KafkaFdwExecutionState *)node->fdw_state;
+    festate->scan_data_desc = scand;
 }
 
 static void
 kafkaShutdownForeignScan(ForeignScanState *node)
 {
-    KafkaFdwExecutionState *festate = (KafkaFdwExecutionState *) node->fdw_state;
-    festate->scan_data_desc         = NULL;
+    KafkaFdwExecutionState *festate = (KafkaFdwExecutionState *)node->fdw_state;
+    festate->scan_data_desc = NULL;
 }
 #endif

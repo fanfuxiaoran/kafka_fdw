@@ -22,7 +22,7 @@ List *ExecInitExprList(List *nodes, PlanState *parent);
 List *
 ExecInitExprList(List *nodes, PlanState *parent)
 {
-    List *    result = NIL;
+    List *result = NIL;
     ListCell *lc;
 
     foreach (lc, nodes)
@@ -41,39 +41,39 @@ ExecInitExprList(List *nodes, PlanState *parent)
     kafka_create_foreignscan_path harmonizes it
 */
 #if PG_VERSION_NUM >= 90600
-#define kafka_create_foreignscan_path(planner_info,                                                                    \
-                                      reloptinfo,                                                                      \
-                                      pathtarget,                                                                      \
-                                      rows,                                                                            \
-                                      startup_cost,                                                                    \
-                                      total_cost,                                                                      \
-                                      pathkeys,                                                                        \
-                                      req_outer,                                                                       \
-                                      fdw_outerpath,                                                                   \
-                                      fdw_private)                                                                     \
-    (create_foreignscan_path(planner_info,                                                                             \
-                             reloptinfo,                                                                               \
-                             pathtarget,                                                                               \
-                             rows,                                                                                     \
-                             startup_cost,                                                                             \
-                             total_cost,                                                                               \
-                             pathkeys,                                                                                 \
-                             req_outer,                                                                                \
-                             fdw_outerpath,                                                                            \
+#define kafka_create_foreignscan_path(planner_info,  \
+                                      reloptinfo,    \
+                                      pathtarget,    \
+                                      rows,          \
+                                      startup_cost,  \
+                                      total_cost,    \
+                                      pathkeys,      \
+                                      req_outer,     \
+                                      fdw_outerpath, \
+                                      fdw_private)   \
+    (create_foreignscan_path(planner_info,           \
+                             reloptinfo,             \
+                             pathtarget,             \
+                             rows,                   \
+                             startup_cost,           \
+                             total_cost,             \
+                             pathkeys,               \
+                             req_outer,              \
+                             fdw_outerpath,          \
                              fdw_private))
 
 #else
-#define kafka_create_foreignscan_path(planner_info,                                                                    \
-                                      reloptinfo,                                                                      \
-                                      pathtarget,                                                                      \
-                                      rows,                                                                            \
-                                      startup_cost,                                                                    \
-                                      total_cost,                                                                      \
-                                      pathkeys,                                                                        \
-                                      req_outer,                                                                       \
-                                      fdw_outerpath,                                                                   \
-                                      fdw_private)                                                                     \
-    (create_foreignscan_path(                                                                                          \
-      planner_info, reloptinfo, rows, startup_cost, total_cost, pathkeys, req_outer, fdw_outerpath, fdw_private))
+#define kafka_create_foreignscan_path(planner_info,  \
+                                      reloptinfo,    \
+                                      pathtarget,    \
+                                      rows,          \
+                                      startup_cost,  \
+                                      total_cost,    \
+                                      pathkeys,      \
+                                      req_outer,     \
+                                      fdw_outerpath, \
+                                      fdw_private)   \
+    (create_foreignscan_path(                        \
+        planner_info, reloptinfo, rows, startup_cost, total_cost, pathkeys, req_outer, fdw_private))
 #endif
 #endif
