@@ -5,6 +5,7 @@
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
+#include "cdb/cdbvars.h"
 
 PG_MODULE_MAGIC;
 
@@ -790,8 +791,17 @@ kafkaIterateForeignScan(ForeignScanState *node)
         scan_p = &festate->scan_data->data[festate->scan_data->cursor];
 
         DEBUGLOG("start consume");
+		int id =0;
+		if (GpIdentity.segindex >=0){
+
+			id = GpIdentity.segindex;
+		}else {
+				id=scan_p->partition;
+		}
+
+
         festate->buffer_count = rd_kafka_consume_batch(festate->kafka_topic_handle,
-                                                       scan_p->partition,
+                                                       id,
                                                        kafka_options->buffer_delay,
                                                        festate->buffer,
                                                        kafka_options->batch_size);
@@ -833,7 +843,6 @@ kafkaIterateForeignScan(ForeignScanState *node)
 
     rd_kafka_message_destroy(message);
     festate->buffer_cursor++;
-
     return slot;
 }
 

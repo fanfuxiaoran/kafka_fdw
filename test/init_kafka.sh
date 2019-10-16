@@ -1,9 +1,9 @@
 #!/bin/bash
-: ${KAFKA_PRODUCER:="/usr/local/bin/kafka-console-producer"}
-: ${KAFKA_TOPICS:="/usr/local/bin/kafka-topics"}
+: ${KAFKA_PRODUCER:="/home/gpadmin/projects/kafka/bin/kafka-console-producer.sh"}
+: ${KAFKA_TOPICS:="/home/gpadmin/projects/kafka/bin/kafka-topics.sh"}
 
 topics=( contrib_regress4 contrib_regress contrib_regress_prod contrib_regress_prod_json contrib_regress_junk contrib_regress_json contrib_regress_json_junk )
-partitions=( 4 1 4 4 1 1 1 )
+partitions=( 4 3 4 4 1 1 1 )
 
 if [[ -n "${PG_CONFIG}" ]]; then
 	BIN=$(${PG_CONFIG} --bindir)
