@@ -453,9 +453,9 @@ makeKafkaExecutionState(Relation relation, KafkaOptions *kafka_options, ParseOpt
     /* we we get a parallel scan_data_desc will point to a shared mem segment by InitializeDSMForeignScan */
     festate->scan_data_desc = (KafkaScanDataDesc *)palloc0(sizeof(KafkaScanDataDesc));
 #ifdef DO_PARALLEL
-    pg_atomic_init_u32(&festate->scan_data_desc->next_scanp, 0);
+    pg_atomic_init_u32(&festate->scan_data_desc->next_scanp, -1);
 #else
-    festate->scan_data_desc->next_scanp = 0;
+    festate->scan_data_desc->next_scanp = -1;
 #endif
     /* TODO: memcpy */
     festate->kafka_options = *kafka_options;
@@ -1172,6 +1172,10 @@ kafkaStart(KafkaFdwExecutionState *festate)
     festate->buffer_cursor = 0;
 
     DEBUGLOG("%s", __func__);
+    if (festate->scan_data->cursor == -1)
+    {
+        festate->scan_data->cursor = next_work(festate->scan_data, festate->scan_data_desc);
+    }
 
     if (festate->scan_data->cursor == -1)
         return false;
