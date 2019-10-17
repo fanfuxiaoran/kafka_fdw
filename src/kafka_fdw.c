@@ -6,6 +6,7 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "cdb/cdbvars.h"
+#include <sys/file.h>
 
 PG_MODULE_MAGIC;
 
@@ -97,15 +98,15 @@ int getPartitionIndex(const char *tempname)
     size_t count = 0;
 
     if (!fd)
-        elog(ERROR, "Fail to open temp file.");
+        elog(ERROR, "Fail to open temp file. %s", tempname);
     if (flock(fileno(fd), LOCK_EX) != 0)
-        elog(ERROR, "Fail to open temp file.");
+        elog(ERROR, "Fail to lock temp file. %s", tempname);
     if (fread(&count, sizeof(size_t), 1, fd) <= 0)
         count = 0;
     count++;
     rewind(fd);
     if (fwrite(&count, sizeof(size_t), 1, fd) <=0 )
-        elog(ERROR, "Fail to write temp file.");
+        elog(ERROR, "Fail to write temp file. %s", tempname);
     flock(fileno(fd), LOCK_UN);
     fclose(fd);
     return count-1;
@@ -295,7 +296,7 @@ kafkaGetForeignPlan(PlannerInfo *root,
     char name[] = "/tmp/kafkagpXXXXXX";
     tempfd = mkstemp(name);
     if (tempfd == -1)
-        elog(EARROR, "failed to creat temp file");
+        elog(ERROR, "failed to creat temp file");
     /*
      * We have no native ability to evaluate restriction clauses, so we just
      * put all the scan_clauses into the plan node's qual list for the
@@ -346,7 +347,7 @@ kafkaGetForeignPlan(PlannerInfo *root,
 
     /* we pass the scan_node_list for scanning */
     options = list_make1(scan_node_list);
-    lappend(makeString(name)));
+    lappend(options,makeString(name));
     /* Create the ForeignScan node */
     return make_foreignscan(tlist,
                             scan_clauses,
@@ -707,7 +708,7 @@ kafkaIterateForeignScan(ForeignScanState *node)
     if (festate->scan_data->len == 0)
     {
         DEBUGLOG("%s", __func__);
-        List fdw_private = ((ForeignScan *) node->ss.ps.plan)->fdw_private;
+        List *fdw_private = ((ForeignScan *) node->ss.ps.plan)->fdw_private;
         tempfile = strVal(lfirst(list_tail(fdw_private)));
         /*
          * if we got parameters we evaluate them now
