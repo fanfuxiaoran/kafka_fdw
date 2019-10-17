@@ -13,6 +13,7 @@ PG_MODULE_MAGIC;
 #define STEP_FACTOR 20
 
 double kafka_tuple_cost = 0.2f;
+static int fd = 0;
 
 /*
  * Module load callback
@@ -262,6 +263,8 @@ kafkaGetForeignPlan(PlannerInfo *root,
                     List *scan_clauses,
                     Plan *outer_plan)
 {
+    char name[] = "/tmp/kafkagpXXXXXX";
+    fd = mkstemp(name);
     ListCell *lc;
     List *scan_list, *scan_node_list, *param_list;
     KafkaFdwPlanState *fdw_private = (KafkaFdwPlanState *)baserel->fdw_private;
@@ -320,7 +323,8 @@ kafkaGetForeignPlan(PlannerInfo *root,
 
     /* we pass the scan_node_list for scanning */
     options = list_make1(scan_node_list);
-
+    lappend(options,
+            makeDefElem("kafalovesgp", CStringGetTextDatum(name)));
     /* Create the ForeignScan node */
     return make_foreignscan(tlist,
                             scan_clauses,
@@ -791,14 +795,16 @@ kafkaIterateForeignScan(ForeignScanState *node)
         scan_p = &festate->scan_data->data[festate->scan_data->cursor];
 
         DEBUGLOG("start consume");
-		int id =0;
-		if (GpIdentity.segindex >=0){
+        int id = 0;
+        if (GpIdentity.segindex >= 0)
+        {
 
-			id = GpIdentity.segindex;
-		}else {
-				id=scan_p->partition;
-		}
-
+            id = GpIdentity.segindex;
+        }
+        else
+        {
+            id = scan_p->partition;
+        }
 
         festate->buffer_count = rd_kafka_consume_batch(festate->kafka_topic_handle,
                                                        id,
