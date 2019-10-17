@@ -6,6 +6,7 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "cdb/cdbvars.h"
+#include "cdb/cdbutil.h"
 
 PG_MODULE_MAGIC;
 
@@ -13,6 +14,7 @@ PG_MODULE_MAGIC;
 #define STEP_FACTOR 20
 
 double kafka_tuple_cost = 0.2f;
+int total_primaries = 0;
 
 /*
  * Module load callback
@@ -262,6 +264,7 @@ kafkaGetForeignPlan(PlannerInfo *root,
                     List *scan_clauses,
                     Plan *outer_plan)
 {
+
     ListCell *lc;
     List *scan_list, *scan_node_list, *param_list;
     KafkaFdwPlanState *fdw_private = (KafkaFdwPlanState *)baserel->fdw_private;
@@ -320,7 +323,6 @@ kafkaGetForeignPlan(PlannerInfo *root,
 
     /* we pass the scan_node_list for scanning */
     options = list_make1(scan_node_list);
-
     /* Create the ForeignScan node */
     return make_foreignscan(tlist,
                             scan_clauses,
@@ -791,17 +793,9 @@ kafkaIterateForeignScan(ForeignScanState *node)
         scan_p = &festate->scan_data->data[festate->scan_data->cursor];
 
         DEBUGLOG("start consume");
-		int id =0;
-		if (GpIdentity.segindex >=0){
-
-			id = GpIdentity.segindex;
-		}else {
-				id=scan_p->partition;
-		}
-
 
         festate->buffer_count = rd_kafka_consume_batch(festate->kafka_topic_handle,
-                                                       id,
+                                                       scan_p->partition,
                                                        kafka_options->buffer_delay,
                                                        festate->buffer,
                                                        kafka_options->batch_size);
@@ -1075,20 +1069,54 @@ kafkaNext(KafkaFdwExecutionState *festate)
 static int
 next_work(KafkaScanPData *scan_p, KafkaScanDataDesc *scand)
 {
-    int next;
+    /* get the total valid primary segdb count */
+    if (total_primaries == 0)
+    {
+        CdbComponentDatabases *db_info;
+        db_info = cdbcomponent_getCdbComponents();
+        int i;
+        for (i = 0; i < db_info->total_segment_dbs; i++)
+        {
+            CdbComponentDatabaseInfo *p = &db_info->segment_db_info[i];
+
+            if (SEGMENT_IS_ACTIVE_PRIMARY(p))
+                total_primaries++;
+        }
+    }
+
+    int next = -1;
 
     if (scand == NULL)
         return -1;
-
+    while (next < scan_p->len)
+    {
+/* code */
 #ifdef DO_PARALLEL
-    next = pg_atomic_fetch_add_u32(&scand->next_scanp, 1);
+        next = pg_atomic_fetch_add_u32(&scand->next_scanp, 1);
 #else
-    next = scand->next_scanp++;
+        next = scand->next_scanp++;
 #endif
 
-    if (next >= scan_p->len)
-        return -1;
+        if (next >= scan_p->len)
+            return -1;
+        if (GpIdentity.segindex > 0)
+        {
+            if ((next % total_primaries) == GpIdentity.segindex)
+            {
 
+                return next;
+            }
+            else
+            {
+                continue;
+            }
+        }
+        else
+        {
+
+            return next;
+        }
+    }
     return next;
 }
 
