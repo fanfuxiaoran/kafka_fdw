@@ -14,8 +14,8 @@ PG_MODULE_MAGIC;
 #define STEP_FACTOR 20
 
 double kafka_tuple_cost = 0.2f;
-static int tempfd = -1;
-static char *tempfile = NULL;
+static FILE *tempfd = NULL;
+static char *tempfile = "/tmp/tempfileonqd";
 
 /*
  * Module load callback
@@ -94,7 +94,9 @@ static void kafkaGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid f
 
 int getPartitionIndex(const char *tempname) 
 {
-    FILE *fd = fopen(tempname, "w");
+	if (!tempname)
+		elog(ERROR, "tmep file name is null");
+    FILE *fd = fopen(tempname, "r+");
     size_t count = 0;
 
     if (!fd)
@@ -103,10 +105,15 @@ int getPartitionIndex(const char *tempname)
         elog(ERROR, "Fail to lock temp file. %s", tempname);
     if (fread(&count, sizeof(size_t), 1, fd) <= 0)
         count = 0;
+	else
+		elog(LOG, "success to read index");
+	elog(LOG, "read index value is %d", count);
     count++;
     rewind(fd);
     if (fwrite(&count, sizeof(size_t), 1, fd) <=0 )
         elog(ERROR, "Fail to write temp file. %s", tempname);
+	fflush(fd);
+	fsync(fileno(fd));
     flock(fileno(fd), LOCK_UN);
     fclose(fd);
     return count-1;
@@ -293,10 +300,10 @@ kafkaGetForeignPlan(PlannerInfo *root,
 
     DEBUGLOG("%s", __func__);
 
-    char name[] = "/tmp/kafkagpXXXXXX";
-    tempfd = mkstemp(name);
-    if (tempfd == -1)
+    tempfd = fopen(tempfile, "w+");
+    if (!tempfd)
         elog(ERROR, "failed to creat temp file");
+	fclose(tempfd);
     /*
      * We have no native ability to evaluate restriction clauses, so we just
      * put all the scan_clauses into the plan node's qual list for the
@@ -347,7 +354,6 @@ kafkaGetForeignPlan(PlannerInfo *root,
 
     /* we pass the scan_node_list for scanning */
     options = list_make1(scan_node_list);
-    lappend(options,makeString(name));
     /* Create the ForeignScan node */
     return make_foreignscan(tlist,
                             scan_clauses,
@@ -708,8 +714,6 @@ kafkaIterateForeignScan(ForeignScanState *node)
     if (festate->scan_data->len == 0)
     {
         DEBUGLOG("%s", __func__);
-        List *fdw_private = ((ForeignScan *) node->ss.ps.plan)->fdw_private;
-        tempfile = strVal(lfirst(list_tail(fdw_private)));
         /*
          * if we got parameters we evaluate them now
          * we do so in the short lived per tuple context to avoid any leaking
@@ -1057,9 +1061,7 @@ kafkaEndForeignScan(ForeignScanState *node)
     KafkaFdwExecutionState *festate = (KafkaFdwExecutionState *)node->fdw_state;
 
     DEBUGLOG("%s", __func__);
-    if (tempfd != -1)
-        close(tempfd);
-    tempfd = -1;
+    tempfd = NULL;
 
     /* if festate is NULL, we are in EXPLAIN; nothing to do */
     if (festate == NULL)
@@ -1108,7 +1110,7 @@ next_work(KafkaScanPData *scan_p, KafkaScanDataDesc *scand)
 #else
     next = getPartitionIndex(tempfile);
 #endif
-
+	elog(LOG, "current idx is: %d, len is %d", next, scan_p->len);
     if (next >= scan_p->len)
         return -1;
 
